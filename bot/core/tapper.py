@@ -483,7 +483,7 @@ class Tapper:
                         claim = None
                         check = None
                         
-                        if task.get('type') == 'emoji' and settings: # Emoji task
+                        if task.get('type') == 'emoji' and settings.AUTO_TASK: # Emoji task
                                 logger.info(f"{self.session_name} | Start task <light-red>{task['name']}.</light-red> Wait {30}s 🍅")
                                 await asyncio.sleep(30)
                                 await self.name_change(emoji='🍅')
