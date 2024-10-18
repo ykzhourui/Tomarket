@@ -234,48 +234,60 @@ class Tapper:
     
     @error_handler
     async def name_change(self, emoji: str) -> bool:
+        # await asyncio.sleep(random.randint(3, 5))
+        if self.proxy:
+            proxy = Proxy.from_str(self.proxy)
+            proxy_dict = dict(
+                scheme=proxy.protocol,
+                hostname=proxy.host,
+                port=proxy.port,
+                username=proxy.login,
+                password=proxy.password
+            )
+        else:
+            proxy_dict = None
+
+        self.tg_client.proxy = proxy_dict
         
-        
-        logger.info(f"{self.session_name} | Starting name change process...")  # New log added
+        logger.info(f"{self.session_name} | Starting name change process...")
 
         if not self.tg_client.is_connected:
                 try:
+                    logger.info(f"{self.session_name} | Sleeping 15 seconds before connecting...")
+                    await asyncio.sleep(15)
                     await self.tg_client.connect()
 
                 except (Unauthorized, UserDeactivated, AuthKeyUnregistered):
                     raise InvalidSession(self.session_name)
 
         try:
-            logger.info(f"{self.session_name} | Fetching current profile information...")  # New log added
             user = await self.tg_client.get_me()
             
             current_name = user.first_name
-            logger.info(f"{self.session_name} | Current Name: <y>{current_name}</y>")  # Moved log earlier
+            logger.info(f"{self.session_name} | Current Name: <y>{current_name}</y>")
             
             new_name = current_name + emoji if emoji not in current_name else current_name
             
             if current_name != new_name:
-                logger.info(f"{self.session_name} | Updating name to: <y>{new_name}</y>")  # New log added
                 try:
                     await self.tg_client.update_profile(first_name=new_name)
                     logger.info(f"{self.session_name} | Name changed to: <y>{new_name}</y>")
-                    return True  # Success
+                    return True  
                 except Exception as e:
                     logger.error(f"{self.session_name} | Error updating {new_name}: {str(e)}")
                     await asyncio.sleep(5)
-                    return False  # Failure
+                    return False
             else:
                 logger.info(f"{self.session_name} | Name already contains the emoji.")
-                return False  # No change needed
+                return False
 
         except Exception as e:
-            logger.error(f"{self.session_name} | Error during name change: {str(e)}")  # New log for exceptions
+            logger.error(f"{self.session_name} | Error during name change: {str(e)}")
             return False
 
         finally:
             if self.tg_client.is_connected:
-                logger.info(f"{self.session_name} | Ensuring all pending tasks are complete...")
-                await self.tg_client.idle()  # This ensures that all background tasks are processed
+                await asyncio.sleep(5)
                 logger.info(f"{self.session_name} | Disconnecting Telegram client...")
                 await self.tg_client.disconnect()
             await asyncio.sleep(random.randint(10, 20))
@@ -459,6 +471,8 @@ class Tapper:
                                             # For tasks that do not require time validation
                                             elif task.get('type') not in ['wallet', 'mysterious', 'classmate', 'classmateInvite', 'classmateInviteBack', 'charge_stars_season2','chain_donate_free','daily_donate']:
                                                 tasks_list.append(task)
+                                        if task.get('type') == 'youtube' and task.get('status') != 3:
+                                            tasks_list.append(task)
                             elif isinstance(task_group, dict):  # Handle 3rd party tasks like in the "3rd" section
                                 for group_name, group_tasks in task_group.items():
                                     if isinstance(group_tasks, list):
@@ -470,6 +484,7 @@ class Tapper:
                     for task in tasks_list:
                         wait_second = task.get('waitSecond', 0)
                         claim = None
+                        check = None
                         if task.get('type') == 'free_tomato':
                             logger.info(f"{self.session_name} | Start task <light-red>{task['name']}.</light-red> Wait {3}s 🍅")
                             await asyncio.sleep(3)
@@ -478,16 +493,18 @@ class Tapper:
                         
                         elif task.get('type') == 'emoji':
                             if settings.AUTO_CHANGE_NAME:
-                                logger.info(f"{self.session_name} | Start task <light-red>{task['name']}.</light-red> Wait {3}s 🍅")
-                                await asyncio.sleep(3)
-                                
+                                logger.info(f"{self.session_name} | Start task <light-red>{task['name']}.</light-red> Wait {30}s 🍅")
+                                await asyncio.sleep(30)
                                 await self.name_change(emoji='🍅')
-                                
+                                await asyncio.sleep(15)
+                                logger.info(f"{self.session_name} | Name changed to include emoji")
+                                starttask = await self.start_task(http_client=http_client, data={'task_id': task['taskId'],'init_data':init_data})
+                                await asyncio.sleep(3)
                                 check = await self.check_task(http_client=http_client, data={'task_id': task['taskId'], 'init_data': init_data})
+                                await asyncio.sleep(3)
                                 if check:
-                                    logger.info(f"{self.session_name} | Task <light-red>{task['name']}</light-red> claimed! 🍅")
-                                else:
-                                    logger.info(f"{self.session_name} | Task <light-red>{task['name']}</light-red> was failed! 🍅")
+                                    logger.info(f"{self.session_name} | Task <light-red>{task['name']}</light-red> checked! 🍅")
+                                    claim = await self.claim_task(http_client=http_client, data={'task_id': task['taskId']})
                         else:
                             starttask = await self.start_task(http_client=http_client, data={'task_id': task['taskId'],'init_data':init_data})
                             task_data = starttask.get('data', {}) if starttask else None
