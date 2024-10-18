@@ -248,13 +248,11 @@ class Tapper:
             proxy_dict = None
 
         self.tg_client.proxy = proxy_dict
-        
-        logger.info(f"{self.session_name} | Starting name change process...")
 
         if not self.tg_client.is_connected:
                 try:
-                    logger.info(f"{self.session_name} | Sleeping 15 seconds before connecting...")
-                    await asyncio.sleep(15)
+                    logger.info(f"{self.session_name} | Sleeping 5 seconds before connecting tg_client...")
+                    await asyncio.sleep(5)
                     await self.tg_client.connect()
 
                 except (Unauthorized, UserDeactivated, AuthKeyUnregistered):
@@ -288,7 +286,6 @@ class Tapper:
         finally:
             if self.tg_client.is_connected:
                 await asyncio.sleep(5)
-                logger.info(f"{self.session_name} | Disconnecting Telegram client...")
                 await self.tg_client.disconnect()
             await asyncio.sleep(random.randint(10, 20))
     
@@ -485,19 +482,12 @@ class Tapper:
                         wait_second = task.get('waitSecond', 0)
                         claim = None
                         check = None
-                        if task.get('type') == 'free_tomato':
-                            logger.info(f"{self.session_name} | Start task <light-red>{task['name']}.</light-red> Wait {3}s 🍅")
-                            await asyncio.sleep(3)
-                            await self.check_task(http_client=http_client, data={'task_id': task['taskId'],'init_data':init_data})
-                            claim = await self.claim_task(http_client=http_client, data={'task_id': task['taskId']})
                         
-                        elif task.get('type') == 'emoji':
-                            if settings.AUTO_CHANGE_NAME:
+                        if task.get('type') == 'emoji' and settings: # Emoji task
                                 logger.info(f"{self.session_name} | Start task <light-red>{task['name']}.</light-red> Wait {30}s 🍅")
                                 await asyncio.sleep(30)
                                 await self.name_change(emoji='🍅')
-                                await asyncio.sleep(15)
-                                logger.info(f"{self.session_name} | Name changed to include emoji")
+                                # await asyncio.sleep(15)
                                 starttask = await self.start_task(http_client=http_client, data={'task_id': task['taskId'],'init_data':init_data})
                                 await asyncio.sleep(3)
                                 check = await self.check_task(http_client=http_client, data={'task_id': task['taskId'], 'init_data': init_data})
@@ -508,7 +498,7 @@ class Tapper:
                         else:
                             starttask = await self.start_task(http_client=http_client, data={'task_id': task['taskId'],'init_data':init_data})
                             task_data = starttask.get('data', {}) if starttask else None
-                            if task_data == 'ok' or task_data.get('status') == 1 if task_data else False:
+                            if task_data == 'ok' or task_data.get('status') == 1 or task_data.get('status') ==2 if task_data else False:
                                 logger.info(f"{self.session_name} | Start task <light-red>{task['name']}.</light-red> Wait {wait_second}s 🍅")
                                 await asyncio.sleep(wait_second + 3)
                                 await self.check_task(http_client=http_client, data={'task_id': task['taskId'],'init_data':init_data})
