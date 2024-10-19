@@ -7,6 +7,7 @@ from time import time
 from urllib.parse import unquote, quote
 
 import aiohttp
+import pytz
 from aiohttp_proxy import ProxyConnector
 from better_proxy import Proxy
 from pyrogram import Client
@@ -37,6 +38,15 @@ def convert_to_local_and_unix(iso_time):
     local_dt = dt.astimezone(get_localzone())
     unix_time = int(local_dt.timestamp())
     return unix_time
+
+def is_puzzle_expired(expiration_time_utc_str):
+    local_tz = get_localzone()
+    utc_tz = pytz.utc
+    expiration_time_utc = datetime.strptime(expiration_time_utc_str, '%Y-%m-%d %I:%M %p')
+    expiration_time_utc = utc_tz.localize(expiration_time_utc)
+    expiration_time_local = expiration_time_utc.astimezone(local_tz)
+    current_time = datetime.now(local_tz)
+    return current_time >= expiration_time_local
 
 class Tapper:
     def __init__(self, tg_client: Client, proxy: str | None):
@@ -132,9 +142,9 @@ class Tapper:
     async def get_balance(self, http_client):
         return await self.make_request(http_client, "POST", "/user/balance")
 
-    @error_handler
-    async def claim_daily(self, http_client):
-        return await self.make_request(http_client, "POST", "/daily/claim", json={"game_id": "fa873d13-d831-4d6f-8aee-9cff7a1d0db1"})
+    # @error_handler
+    # async def claim_daily(self, http_client):
+    #     return await self.make_request(http_client, "POST", "/daily/claim", json={"game_id": "fa873d13-d831-4d6f-8aee-9cff7a1d0db1"})
 
     @error_handler
     async def start_farming(self, http_client):
@@ -202,9 +212,50 @@ class Tapper:
                     if response.status == 200:
                         try:
                             text = await response.text()
-                            puzzle = json.loads(text)
-                            logger.info(f"{self.session_name} - Puzzle retrieved successfully: {puzzle}")
-                            return puzzle
+                            data = json.loads(text)
+                            puzzle = data.get('puzzle')
+                            expire = data.get('expire')
+                            if is_puzzle_expired(expire):
+                                logger.info("The puzzle has expired.Retrying from backup puzzle repo....")
+                                back_up = await self.get_puzzle_second()
+                                if back_up:
+                                    logger.info(f"{self.session_name} - Backup Puzzle retrieved successfully: {back_up}")
+                                    return back_up
+                                else:
+                                    logger.info("Even from backup repos,we fail to get puzzle!")
+                                    return None
+                            else:
+                                logger.info(f"{self.session_name} - Puzzle retrieved successfully from main repo : {puzzle}")
+                                return puzzle
+                        except Exception as json_err:
+                            logger.error(f"{self.session_name} - Error parsing JSON response: {json_err}")
+                            return None
+                    else:
+                        logger.error(f"{self.session_name} -Failed to retrieve puzzle. Status code: {response.status}")
+                        return None
+        except Exception as e:
+            logger.error(f"{self.session_name} - Exception occurred while retrieving puzzle: {e}")
+            return None
+        
+        
+    @error_handler
+    async def get_puzzle_second(self):
+        url = "https://raw.githubusercontent.com/zuydd/database/refs/heads/main/tomarket.json"
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        try:
+                            text = await response.text()
+                            data = json.loads(text)
+                            puzzle = data.get('puzzle', None)
+                            if puzzle:
+                                logger.info(f"{self.session_name} - Puzzle retrieved successfully: {puzzle}")
+                                return puzzle
+                            else:
+                                logger.error(f"{self.session_name} - Puzzle not found in backup repo.")
+                                return None
                         except Exception as json_err:
                             logger.error(f"{self.session_name} - Error parsing JSON response: {json_err}")
                             return None
@@ -409,26 +460,26 @@ class Tapper:
                 await asyncio.sleep(1.5)
 
 
-                if settings.AUTO_DAILY_REWARD:
-                    claim_daily = await self.claim_daily(http_client=http_client)
-                    if claim_daily and 'status' in claim_daily and claim_daily.get("status", 400) != 400:
-                        logger.info(f"{self.session_name} | Daily: <light-red>{claim_daily['data']['today_game']}</light-red> reward: <light-red>{claim_daily['data']['today_points']}</light-red>")
-                    else:
-                        logger.info(f"{self.session_name} | Daily login already claimed!")
+                # if settings.AUTO_DAILY_REWARD:
+                #     claim_daily = await self.claim_daily(http_client=http_client)
+                #     if claim_daily and 'status' in claim_daily and claim_daily.get("status", 400) != 400:
+                #         logger.info(f"{self.session_name} | Daily: <light-red>{claim_daily['data']['today_game']}</light-red> reward: <light-red>{claim_daily['data']['today_points']}</light-red>")
+                #     else:
+                #         logger.info(f"{self.session_name} | Daily login already claimed!")
 
-                await asyncio.sleep(1.5)
+                # await asyncio.sleep(1.5)
 
                 if settings.AUTO_PLAY_GAME:
                     tickets = balance.get('data', {}).get('play_passes', 0)
 
-                    logger.info(f"{self.session_name} | Game Play Tickets: <light-red>{tickets}</light-red>")
+                    logger.info(f"{self.session_name} | Game Play Tickets: <light-red>{tickets} 🎟️</light-red>")
 
                     await asyncio.sleep(1.5)
                     if tickets > 0:
                         logger.info(f"{self.session_name} | Start ticket games...")
                         games_points = 0
                         while tickets > 0:
-                            logger.info(f"{self.session_name} | Tickets remaining: {tickets}")
+                            logger.info(f"{self.session_name} | Tickets remaining: <light-red>{tickets} 🎟️</light-red>")
                             play_game = await self.play_game(http_client=http_client)
                             if play_game and 'status' in play_game:
                                 if play_game.get('status') == 0:
@@ -444,7 +495,7 @@ class Tapper:
                                             games_points += claim_game.get('data').get('points')
                                             logger.info(f"{self.session_name} | Claimed points: {claim_game.get('data').get('points')}, Tickets left: {tickets}")
                                             await asyncio.sleep(1.5)
-                        logger.info(f"{self.session_name} | Games finish! Claimed points: <light-red>{games_points}</light-red>")
+                        logger.info(f"{self.session_name} | Games finish! Claimed points: <light-red>{games_points} 🍅</light-red>")
 
                 if settings.AUTO_TASK:
                     logger.info(f"{self.session_name} | Start checking tasks.")
@@ -452,25 +503,23 @@ class Tapper:
                     tasks_list = []
 
                     if tasks and tasks.get("status", 500) == 0:
-                        # Loop over categories in the "data" field (e.g., "standard", "chain_free", "3rd")
                         for category, task_group in tasks["data"].items():
-                            if isinstance(task_group, list):  # Ensure task_group is a list (e.g., "standard", "chain_free")
+                            if isinstance(task_group, list):
                                 for task in task_group:
-                                    if isinstance(task, dict):  # Ensure each task is a dictionary
+                                    if isinstance(task, dict):  
                                         if task.get('enable') and not task.get('invisible', False) and task.get('status') != 3:
-                                            # Check if task has start and end times
                                             if task.get('startTime') and task.get('endTime'):
                                                 task_start = convert_to_local_and_unix(task['startTime'])
                                                 task_end = convert_to_local_and_unix(task['endTime'])
-                                                # Only add tasks that are within the start and end times
+                                        
                                                 if task_start <= time() <= task_end  and task.get('type') not in ['charge_stars_season2', 'chain_donate_free','daily_donate','new_package']:
                                                     tasks_list.append(task)
-                                            # For tasks that do not require time validation
+                                            
                                             elif task.get('type') not in ['wallet', 'mysterious', 'classmate', 'classmateInvite', 'classmateInviteBack', 'charge_stars_season2','chain_donate_free','daily_donate']:
                                                 tasks_list.append(task)
                                         if task.get('type') == 'youtube' and task.get('status') != 3:
                                             tasks_list.append(task)
-                            elif isinstance(task_group, dict):  # Handle 3rd party tasks like in the "3rd" section
+                            elif isinstance(task_group, dict):  
                                 for group_name, group_tasks in task_group.items():
                                     if isinstance(group_tasks, list):
                                         for task in group_tasks:
@@ -487,7 +536,7 @@ class Tapper:
                                 logger.info(f"{self.session_name} | Start task <light-red>{task['name']}.</light-red> Wait {30}s 🍅")
                                 await asyncio.sleep(30)
                                 await self.name_change(emoji='🍅')
-                                # await asyncio.sleep(15)
+        
                                 starttask = await self.start_task(http_client=http_client, data={'task_id': task['taskId'],'init_data':init_data})
                                 await asyncio.sleep(3)
                                 check = await self.check_task(http_client=http_client, data={'task_id': task['taskId'], 'init_data': init_data})
@@ -560,12 +609,11 @@ class Tapper:
 
                             if claim_combo is not None and claim_combo.get('status') == 0:
                                 logger.info(
-                                    f"{self.session_name} | Claimed combo | Stars: <light-red>+{star_amount}</light-red> | Games Token: <light-red>+{games_token}</light-red> | Tomatoes: <light-red>+{tomatoe_token}</light-red>"
+                                    f"{self.session_name} | Claimed combo | Stars: <light-red>+{star_amount} ⭐</light-red> | Games Token: <light-red>+{games_token} 🎟️</light-red> | Tomatoes: <light-red>+{tomatoe_token} 🍅</light-red>"
                                 )
+                                next_combo_check = int(datetime.fromisoformat(combo_info_data.get('endTime')).timestamp())
                             else:
                                 logger.info(f"{self.session_name} | Combo not claimed. Reason: {claim_combo.get('message', 'Unknown error')}")
-
-                        next_combo_check = int(datetime.fromisoformat(combo_info_data.get('endTime')).timestamp())
 
                     await asyncio.sleep(1.5)
                     
@@ -577,7 +625,7 @@ class Tapper:
                         tickets = tickets.get('data', {}).get('ticket_spin_1', 0)
                         
                         if tickets > 0:
-                            logger.info(f"{self.session_name} | Raffle Tickets: {tickets}")
+                            logger.info(f"{self.session_name} | Raffle Tickets: <light-red>{tickets} 🎟️</light-red>")
                             logger.info(f"{self.session_name} | Start ticket raffle...")
                             while tickets > 0:
                                 play_ticket = await self.play_ticket(http_client=http_client)
