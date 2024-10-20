@@ -653,8 +653,6 @@ class Tapper:
                             tomarket_wallet = await self.make_request(http_client, "POST", "/tasks/walletTask")
                             if tomarket_wallet and tomarket_wallet.get('status', 500) == 0:
                                 server_address = tomarket_wallet.get('data', {}).get('walletAddress', None)
-                                print(f"Server:{server_address}")
-                                print(my_address)
                                 if server_address == my_address:
                                     logger.info(f"{self.session_name} | Current wallet address: '{server_address}'!")
                                 if server_address == '':
