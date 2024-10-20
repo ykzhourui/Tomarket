@@ -21,6 +21,9 @@
 |                       Auto Claim Combo                              |     ✅     |
 |                       Auto Rank Upgrade                             |     ✅     |
 |                        Auto Play Raffle                             |     ✅     |
+|                       Auto Add 🍅 to name                           |     ✅     |
+|                        Auto Claim Stash                             |     ✅     |
+|                  Auto add wallet address                            |     ✅     |
 
 
 ## [Settings](https://github.com/yanpaing007/Tomarket/blob/main/.env-example/)
@@ -40,6 +43,7 @@
 | **USE_RANDOM_DELAY_IN_RUN** | Whether to use random delay at startup (True / False)                              |
 | **RANDOM_DELAY_IN_RUN** |        Random delay at startup (e.g. [0, 15])                                          |
 | **Auto_play_raffle** |        Automatically play raffle(True/False)                                          |
+| **AUTO_ADD_WALLET** |        Automatically add wallet(True/False)                                          |
 | **USE_PROXY_FROM_FILE** |        Whether to use a proxy from the `bot/config/proxies.txt` file (True / False)    |
 
 ## Quick Start 📚
@@ -54,6 +58,22 @@ Before you begin, make sure you have the following installed:
 1. Go to my.telegram.org and log in using your phone number.
 2. Select "API development tools" and fill out the form to register a new application.
 3. Record the API_ID and API_HASH provided after registering your application in the .env file.
+
+## Wallet.json example to add adress to tomarket
+- I suggest,manually adding the wallet if possible
+```
+{
+    "session1_name"{
+        "address":"your_bidget_ton_address1"
+    },
+    "session2_name"{
+        "address":"your_bidget_ton_address2"
+    },
+    "session3_name"{
+        "address":"your_bidget_ton_address3"
+    },
+}
+```
 
 ## Installation
 You can download the [**repository**](https://github.com/yanpaing007/Tomarket) by cloning it to your system and installing the necessary dependencies:

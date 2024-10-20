@@ -142,9 +142,9 @@ class Tapper:
     async def get_balance(self, http_client):
         return await self.make_request(http_client, "POST", "/user/balance")
 
-    # @error_handler
-    # async def claim_daily(self, http_client):
-    #     return await self.make_request(http_client, "POST", "/daily/claim", json={"game_id": "fa873d13-d831-4d6f-8aee-9cff7a1d0db1"})
+    @error_handler
+    async def claim_daily(self, http_client):
+        return await self.make_request(http_client, "POST", "/daily/claim", json={"game_id": "fa873d13-d831-4d6f-8aee-9cff7a1d0db1"})
 
     @error_handler
     async def start_farming(self, http_client):
@@ -231,7 +231,7 @@ class Tapper:
                             logger.error(f"{self.session_name} - Error parsing JSON response: {json_err}")
                             return None
                     else:
-                        logger.error(f"{self.session_name} -Failed to retrieve puzzle. Status code: {response.status}")
+                        logger.error(f"{self.session_name} -Failed to retrieve puzzle. Status code: {response.status}.Please raise an issue in github!")
                         return None
         except Exception as e:
             logger.error(f"{self.session_name} - Exception occurred while retrieving puzzle: {e}")
@@ -460,14 +460,12 @@ class Tapper:
                 await asyncio.sleep(1.5)
 
 
-                # if settings.AUTO_DAILY_REWARD:
-                #     claim_daily = await self.claim_daily(http_client=http_client)
-                #     if claim_daily and 'status' in claim_daily and claim_daily.get("status", 400) != 400:
-                #         logger.info(f"{self.session_name} | Daily: <light-red>{claim_daily['data']['today_game']}</light-red> reward: <light-red>{claim_daily['data']['today_points']}</light-red>")
-                #     else:
-                #         logger.info(f"{self.session_name} | Daily login already claimed!")
+                if settings.AUTO_DAILY_REWARD:
+                    claim_daily = await self.claim_daily(http_client=http_client)
+                    if claim_daily and 'status' in claim_daily and claim_daily.get("status", 400) != 400:
+                        logger.info(f"{self.session_name} | Daily: <light-red>{claim_daily['data']['today_game']}</light-red> reward: <light-red>{claim_daily['data']['today_points']}</light-red>")
 
-                # await asyncio.sleep(1.5)
+                await asyncio.sleep(1.5)
 
                 if settings.AUTO_PLAY_GAME:
                     tickets = balance.get('data', {}).get('play_passes', 0)
@@ -641,6 +639,49 @@ class Tapper:
                             logger.info(f"{self.session_name} | Raffle finish! 🍅")
                         else:
                             logger.info(f"{self.session_name} | No raffle tickets available!")
+                            
+                if settings.AUTO_ADD_WALLET:
+                    wallet_file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'wallet.json')
+
+                    with open(wallet_file_path, 'r') as wallet_file:
+                        wallet_data = json.load(wallet_file)
+                        my_address = wallet_data.get(self.session_name, {}).get('address', None)
+                        if not my_address:
+                            logger.warning(f"{self.session_name} | Wallet address not found for {self.session_name} in wallet.json")
+                        else:
+
+                            tomarket_wallet = await self.make_request(http_client, "POST", "/tasks/walletTask")
+                            if tomarket_wallet and tomarket_wallet.get('status', 500) == 0:
+                                server_address = tomarket_wallet.get('data', {}).get('walletAddress', None)
+                                print(f"Server:{server_address}")
+                                print(my_address)
+                                if server_address == my_address:
+                                    logger.info(f"{self.session_name} | Current wallet address: '{server_address}'!")
+                                if server_address == '':
+                                    logger.info(f"{self.session_name} | Wallet address '{my_address}' not found in tomarket bot! Trying to add...")
+                                    
+                                    add_wallet = await self.make_request(http_client, "POST", "/tasks/address", json={"wallet_address": my_address})
+                                    if add_wallet and add_wallet.get('status', 500) == 0:
+                                        logger.info(f"{self.session_name} | Wallet address '{my_address}' added successfully!")
+                                    else:
+                                        logger.error(f"{self.session_name} | Failed to add wallet address.Reason: {add_wallet.get('message', 'Unknown error')}")
+                                elif server_address != my_address:
+                                    logger.info(f"{self.session_name} | Wallet address mismatch! Server: '{server_address}' | Your Address: '{my_address}'")
+                                    logger.info(f"{self.session_name} | Trying to remove wallet address...")
+                                    remove_wallet = await self.make_request(http_client, "POST", "/tasks/deleteAddress")
+                                    if remove_wallet and remove_wallet.get('status', 500) == 0 and remove_wallet.get('data',{}) == 'ok':
+                                        logger.info(f"{self.session_name} | Wallet address removed successfully!")
+                                        logger.info(f"{self.session_name} | Trying to add wallet address...")
+                                        add_wallet = await self.make_request(http_client, "POST", "/tasks/address", json={"wallet_address": my_address})
+                                        if add_wallet and add_wallet.get('status', 500) == 0:
+                                            logger.info(f"{self.session_name} | Wallet address '{my_address}' added successfully!")
+                                        else:
+                                            logger.error(f"{self.session_name} | Failed to add wallet address.Reason: {add_wallet.get('message', 'Unknown error')}")
+                                    else:
+                                        logger.error(f"{self.session_name} | Failed to remove wallet address!") 
+                            else:
+                                logger.error(f"{self.session_name} | Failed to retrieve wallet information from tomarket bot! Status: {tomarket_wallet.get('status', 'Unknown')}")
+                        
 
                 sleep_time = end_farming_dt - time()
                 logger.info(f'{self.session_name} | Sleep <light-red>{round(sleep_time / 60, 2)}m.</light-red>')
