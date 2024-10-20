@@ -1,7 +1,7 @@
 import asyncio
 from datetime import datetime
 import json
-import os
+import os,sys
 from random import randint, choices, random
 from time import time
 from urllib.parse import unquote, quote
@@ -23,6 +23,7 @@ from bot.exceptions import InvalidSession
 from bot.utils import logger
 from .agents import generate_random_user_agent
 from .headers import headers
+from .api_check import check_base_url
 
 def error_handler(func: Callable):
     @functools.wraps(func)
@@ -354,9 +355,7 @@ class Tapper:
         if settings.FAKE_USERAGENT:            
             http_client.headers['User-Agent'] = generate_random_user_agent(device_type='android', browser_type='chrome')
 
-        # ``
-        # Наши переменные
-        # ``
+
         end_farming_dt = 0
         token_expiration = 0
         tickets = 0
@@ -365,6 +364,9 @@ class Tapper:
         
         while True:
             try:
+                if check_base_url() is False:
+                        sys.exit(
+                            "Detected api change! Stopped the bot for safety. Please raise an issue on the GitHub repository.")
                 if http_client.closed:
                     if proxy_conn:
                         if not proxy_conn.closed:
