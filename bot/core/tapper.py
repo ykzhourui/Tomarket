@@ -492,7 +492,7 @@ class Tapper:
                                         if claim_game.get('status') == 0:
                                             tickets -= 1
                                             games_points += claim_game.get('data').get('points')
-                                            logger.info(f"{self.session_name} | Claimed points: <light-red>+{claim_game.get('data').get('points')} 🍅")
+                                            logger.info(f"{self.session_name} | Claimed points: <light-red>+{claim_game.get('data').get('points')} </light-red> 🍅")
                                             await asyncio.sleep(1.5)
                         logger.info(f"{self.session_name} | Games finish! Claimed points: <light-red>{games_points} 🍅</light-red>")
 
