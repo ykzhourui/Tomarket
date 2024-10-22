@@ -204,7 +204,7 @@ class Tapper:
         return await self.make_request(http_client, "POST", "/tasks/classmateStars", json=data)
     
     @error_handler
-    async def get_puzzle(self):
+    async def get_puzzle(self,taskId):
         url = "https://raw.githubusercontent.com/yanpaing007/Tomarket/refs/heads/main/bot/config/combo.json"
         
         try:
@@ -215,19 +215,18 @@ class Tapper:
                             text = await response.text()
                             data = json.loads(text)
                             puzzle = data.get('puzzle')
-                            expire = data.get('expire')
-                            if is_puzzle_expired(expire):
-                                logger.info(f"{self.session_name} - The puzzle has expired.Retrying from backup puzzle repo....")
-                                back_up = await self.get_puzzle_second()
+                            code = puzzle.get('code')
+                            if taskId != puzzle.get('task_id'):
+                                back_up = await self.get_puzzle_second(taskId)
                                 if back_up:
                                     logger.info(f"{self.session_name} - Backup Puzzle retrieved successfully: {back_up}")
                                     return back_up
                                 else:
                                     logger.info(f"{self.session_name} - Even from backup repos,we fail to get puzzle!")
                                     return None
-                            else:
-                                logger.info(f"{self.session_name} - Puzzle retrieved successfully from main repo : {puzzle}")
-                                return puzzle
+                            
+                            logger.info(f"{self.session_name} - Puzzle retrieved successfully from main repo : {puzzle}")
+                            return code
                         except Exception as json_err:
                             logger.error(f"{self.session_name} - Error parsing JSON response: {json_err}")
                             return None
@@ -240,7 +239,7 @@ class Tapper:
         
         
     @error_handler
-    async def get_puzzle_second(self):
+    async def get_puzzle_second(self,taskId):
         url = "https://raw.githubusercontent.com/zuydd/database/refs/heads/main/tomarket.json"
         
         try:
@@ -251,8 +250,9 @@ class Tapper:
                             text = await response.text()
                             data = json.loads(text)
                             puzzle = data.get('puzzle', None)
-                            if puzzle:
-                                return puzzle
+                            code = data.get('code',None)
+                            if puzzle and puzzle.get('task_id') == taskId:
+                                return code
                             else:
                                 logger.error(f"{self.session_name} - Puzzle not found in backup repo.")
                                 return None
@@ -492,7 +492,7 @@ class Tapper:
                                         if claim_game.get('status') == 0:
                                             tickets -= 1
                                             games_points += claim_game.get('data').get('points')
-                                            logger.info(f"{self.session_name} | Claimed points: <light-red>+{claim_game.get('data').get('points')} 🍅</light-red>, Tickets left: {tickets} 🎟️")
+                                            logger.info(f"{self.session_name} | Claimed points: <light-red>+{claim_game.get('data').get('points')} 🍅")
                                             await asyncio.sleep(1.5)
                         logger.info(f"{self.session_name} | Games finish! Claimed points: <light-red>{games_points} 🍅</light-red>")
 
@@ -511,10 +511,10 @@ class Tapper:
                                                 task_start = convert_to_local_and_unix(task['startTime'])
                                                 task_end = convert_to_local_and_unix(task['endTime'])
                                         
-                                                if task_start <= time() <= task_end  and task.get('type') not in ['charge_stars_season2', 'chain_donate_free','daily_donate','new_package']:
+                                                if task_start <= time() <= task_end  and task.get('type') not in ['charge_stars_season2', 'chain_donate_free','daily_donate','new_package','charge_stars_season3']:
                                                     tasks_list.append(task)
                                             
-                                            elif task.get('type') not in ['wallet', 'mysterious', 'classmate', 'classmateInvite', 'classmateInviteBack', 'charge_stars_season2','chain_donate_free','daily_donate']:
+                                            elif task.get('type') not in ['wallet', 'mysterious', 'classmate', 'classmateInvite', 'classmateInviteBack', 'charge_stars_season2','chain_donate_free','daily_donate','charge_stars_season3']:
                                                 tasks_list.append(task)
                                         if task.get('type') == 'youtube' and task.get('status') != 3:
                                             tasks_list.append(task)
@@ -591,24 +591,30 @@ class Tapper:
                         logger.error(f"{self.session_name} | Failed to retrieve combo info | Response: {combo_info}")
                         return
                     combo_info_data = combo_info.get('data', [None])[0]
-
+                    start_Time = combo_info_data['startTime']
+                    end_Time = combo_info_data['endTime']
+                    status = combo_info_data.get('status')
+                    task_Id = combo_info_data.get('taskId')
+                    task_type = combo_info_data.get('type')
                     
                     if combo_info.get('status') == 0 and combo_info_data is not None:
                         if combo_info_data.get('status') > 0:
                             logger.info(f"{self.session_name} | Daily Combo already claimed.")
                             next_combo_check = int(datetime.fromisoformat(combo_info_data.get('endTime')).timestamp())
+                            logger.info(f"{self.session_name} | Next combo check in <light-red>{round((next_combo_check - time()) / 60)}m.</light-red>")
                         elif combo_info_data.get('status') == 0 and datetime.fromisoformat(combo_info_data.get('endTime')) > datetime.now():
                             star_amount = combo_info_data.get('star')
                             games_token = combo_info_data.get('games')
                             tomatoe_token = combo_info_data.get('score')
 
                             # Call get_puzzle and check its result
-                            payload = await self.get_puzzle()
+                            payload = await self.get_puzzle(task_Id)
                             if payload is None:
                                 logger.error(f"{self.session_name} | Failed to retrieve puzzle payload | Payload: {payload}")
                                 return
+                            combo_json={"task_id":task_Id,"code":payload}
 
-                            claim_combo = await self.claim_combo(http_client, data=payload)
+                            claim_combo = await self.claim_combo(http_client, data=combo_json)
 
                             if (claim_combo is not None and 
                                 claim_combo.get('status') == 0 and 
@@ -619,6 +625,7 @@ class Tapper:
                                     f"{self.session_name} | Claimed combo | Stars: +{star_amount} <light-red>⭐</light-red> | Games Token: +{games_token}<light-red> 🎟️</light-red> | Tomatoes: <light-red>+{tomatoe_token} 🍅</light-red>"
                                 )
                                 next_combo_check = int(datetime.fromisoformat(combo_info_data.get('endTime')).timestamp())
+                                logger.info(f"{self.session_name} | Next combo check in <light-red>{round((next_combo_check - time()) / 60)}m.</light-red>")
                             else:
                                 logger.info(f"{self.session_name} | Combo not claimed. Reason: <light-red>{claim_combo.get('message', 'Unknown error')}</light-red>")
 
