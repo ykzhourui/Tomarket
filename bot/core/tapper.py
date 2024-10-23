@@ -564,7 +564,6 @@ class Tapper:
                                 logger.info(f"{self.session_name} | Next combo check in <light-red>{round((next_combo_check - time()) / 60)}m.</light-red>")
                             except ValueError as ve:
                                 logger.error(f"{self.session_name} | Error parsing combo end time: {end_time} | Exception: {ve}")
-                            return
 
                         try:
                             combo_end_time = datetime.fromisoformat(end_time)
