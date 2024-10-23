@@ -580,9 +580,7 @@ class Tapper:
                                 else:
 
                                     combo_json = {"task_id": task_id, "code": payload}
-                                    print(combo_json)
-
-                                    
+                
                                     claim_combo = await self.claim_combo(http_client, data=combo_json)
                                     if (claim_combo is not None and 
                                         claim_combo.get('status') == 0 and 
