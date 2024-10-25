@@ -266,7 +266,7 @@ class Tapper:
     async def get_version_info(self):
         async with aiohttp.ClientSession() as session:
             try:
-                async with session.get("https://raw.githubusercontent.com/yanpaing007/Tomarket/main/bot/config/version.json") as response:
+                async with session.get("https://raw.githubusercontent.com/yanpaing007/Tomarket/main/bot/config/combo.json") as response:
                     if response.status == 200:
                         data = await response.json()
                         version = data.get('version', None)
