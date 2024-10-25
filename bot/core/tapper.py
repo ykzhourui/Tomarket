@@ -226,7 +226,10 @@ class Tapper:
                                     logger.info(f"{self.session_name} - Puzzle retrieved successfully from {repo_type} repo: {puzzle}")
                                     return code
                                 elif repo_type == "backup":
-                                    logger.info(f"{self.session_name} - Puzzle not found even in backup repo...")
+                                    logger.info(f"{self.session_name} - Puzzle not found even in backup repo,trying from local combo.json...")
+                                    get_local = self.get_local_puzzle(taskId)
+                                    if get_local:
+                                        return get_local
                                     return None
                             except json.JSONDecodeError as json_err:
                                 logger.error(f"{self.session_name} - Error parsing JSON from {repo_type} repo: {json_err}")
@@ -236,6 +239,56 @@ class Tapper:
                     logger.error(f"{self.session_name} - Exception occurred while retrieving puzzle from {repo_type} repo: {e}")
         
         logger.info(f"{self.session_name} - Failed to retrieve puzzle from both main and backup repos.")
+        return None
+    
+    def get_local_puzzle(self,taskId):
+        try:
+            with open('bot/config/combo.json', 'r') as local_file:
+                data = json.load(local_file)
+                puzzle = data.get('puzzle', None)
+                code = puzzle.get('code') if puzzle else None
+
+                if puzzle and puzzle.get('task_id') == taskId:
+                    logger.info(f"{self.session_name} - Puzzle retrieved successfully from local file: {puzzle}")
+                    return code
+                else:
+                    logger.info(f"{self.session_name} - Puzzle with {taskId} not found in local file.Please change the task_id and code in combo.json if you knew the code.")
+                    return None
+
+        except FileNotFoundError:
+            logger.error(f"{self.session_name} - Local file combo.json not found.")
+        except json.JSONDecodeError as json_err:
+            logger.error(f"{self.session_name} - Error parsing JSON from local file: {json_err}")
+
+        logger.info(f"{self.session_name} - Failed to retrieve puzzle from both main and backup repos, and local file.")
+        return None
+    
+    async def get_version_info(self):
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.get("https://raw.githubusercontent.com/yanpaing007/Tomarket/main/bot/config/version.json") as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        version = data.get('version', None)
+                        message = data.get('message', None)
+                        return version,message
+                    else:
+                        logger.error(f"{self.session_name} - Failed to retrieve version info. Status code: {response.status}")
+            except aiohttp.ClientError as e:
+                logger.error(f"{self.session_name} - Exception occurred while retrieving version info: {e}")
+    
+    def get_local_version_info(self):
+        try:
+            with open('bot/config/combo.json', 'r') as local_file:
+                data = json.load(local_file)
+                version = data.get('version', None)
+                return version
+
+        except FileNotFoundError:
+            logger.error(f"{self.session_name} - Local file combo.json not found.")
+        except json.JSONDecodeError as json_err:
+            logger.error(f"{self.session_name} - Error parsing JSON from local file: {json_err}")
+
         return None
     
 
@@ -317,7 +370,16 @@ class Tapper:
             random_delay = randint(settings.RANDOM_DELAY_IN_RUN[0], settings.RANDOM_DELAY_IN_RUN[1])
             logger.info(f"{self.tg_client.name} | Bot will start in <light-red>{random_delay}s</light-red>")
             await asyncio.sleep(delay=random_delay)
+        github_version,message = await self.get_version_info()
+        local_version = self.get_local_version_info()
         
+        if github_version is not None and local_version is not None and message is not None:
+            if github_version == local_version:
+                logger.info(f"{self.session_name} | <cyan>Bot is up to date!</cyan>")
+            else:
+                logger.info(f"{self.session_name} | <cyan>Bot is out of date,please update the bot!</cyan>")
+            logger.info(f"{self.session_name} | <cyan>Developer message:{message}</cyan>")
+            
         proxy_conn = ProxyConnector().from_url(self.proxy) if self.proxy else None
         http_client = aiohttp.ClientSession(headers=headers, connector=proxy_conn)
         if self.proxy:
@@ -349,7 +411,7 @@ class Tapper:
                 current_time = time()
                 if current_time >= token_expiration:
                     if (token_expiration != 0):
-                        logger.warning(f"{self.session_name} | <yellow>Token expired, refreshing...</yellow>")
+                        logger.info(f"{self.session_name} | <yellow>Token expired, refreshing...</yellow>")
                     ref_id, init_data = await self.get_tg_web_data()
                     access_token = await self.login(http_client=http_client, tg_web_data=init_data, ref_id=ref_id)
                     
@@ -588,7 +650,7 @@ class Tapper:
                                         not claim_combo['data']):
                                         
                                         logger.info(
-                                            f"{self.session_name} | Claimed combo | Stars: +{star_amount} <light-red>⭐</light-red> | Games Token: +{games_token}<light-red> 🎟️</light-red> | Tomatoes: +{tomato_token} <light-red>🍅</light-red>"
+                                            f"{self.session_name} | Claimed combo | Stars: +{star_amount} ⭐ | Games Token: +{games_token} 🎟️ | Tomatoes: +{tomato_token} 🍅"
                                         )
 
                                         next_combo_check = int(combo_end_time.timestamp())
@@ -674,7 +736,7 @@ class Tapper:
                     if current_address == '' or current_address is None:
                         logger.info(f"{self.session_name} | Wallet address not found in tomarket bot, add it before OCT 31!")
                     else:
-                        logger.info(f"{self.session_name} | Current wallet address: '<green>{current_address}</green>'")
+                        logger.info(f"{self.session_name} | Current wallet address: '{current_address}'")
                         
 
                 sleep_time = end_farming_dt - time()
