@@ -21,7 +21,6 @@ def get_main_js_format(base_url):
 
 def get_base_api(url):
     try:
-        logger.info(f"Fetching JS file from: {url}")
         response = requests.get(url)
         response.raise_for_status()
         content = response.text
@@ -42,7 +41,6 @@ def check_base_url():
     if main_js_formats:
         for format in main_js_formats:
             full_url = f"https://mini-app.tomarket.ai{format}"
-            logger.info(f"Trying format: {full_url}")
             result = get_base_api(full_url)
 
             if result:
