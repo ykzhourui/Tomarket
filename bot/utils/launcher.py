@@ -9,7 +9,7 @@ from pyrogram import Client
 from better_proxy import Proxy
 
 from bot.config import settings
-from bot.core.api_check import check_base_url
+from bot.core.api_check import check_base_url,get_version_info,get_local_version_info
 from bot.utils import logger
 from bot.core.tapper import run_tapper
 from bot.core.registrator import register_sessions
@@ -75,6 +75,15 @@ async def process() -> None:
     if check_base_url() is False:
         sys.exit(
             "Detected api change! Stopped the bot for safety.Please raise an issue on the GitHub repository.")
+    github_version,message = get_version_info()
+    local_version = get_local_version_info()
+        
+    if github_version is not None and local_version is not None and message is not None:
+        if github_version == local_version:
+            logger.info(f"<cyan>Bot is up to date! v{local_version}</cyan>")
+        else:
+            logger.info(f"<cyan>Bot is out of date,update the bot with command 'git pull' , v{local_version} > v{github_version}</cyan>")
+        logger.info(f"<cyan>Developer message:{message}</cyan>")
 
     logger.info(f"Detected {len(get_session_names())} sessions | {len(get_proxies())} proxies")
 

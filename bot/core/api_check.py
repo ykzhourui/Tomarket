@@ -1,3 +1,4 @@
+import json
 import requests
 import re
 from bot.utils import logger
@@ -44,7 +45,7 @@ def check_base_url():
             result = get_base_api(full_url)
 
             if result:
-                logger.info("<green>No change in API!</green>")
+                logger.info("<cyan>No change in API!</cyan>")
                 return True
             else:
                 logger.warning(f"API might have changed, bot stopped for safety.")
@@ -57,3 +58,29 @@ def check_base_url():
         except requests.RequestException as e:
             logger.info(f"Error fetching the base URL for content dump: {e}")
         return False
+    
+def get_version_info():
+    try:
+        response = requests.get("https://raw.githubusercontent.com/yanpaing007/Tomarket/refs/heads/main/bot/config/combo.json")
+        response.raise_for_status()
+        data = response.json()
+        version = data.get('version', None)
+        message = data.get('message', None)
+        return version, message
+    except requests.RequestException as e:
+        logger.error(f"Error fetching the version info: {e}")
+        return None, None
+    
+def get_local_version_info():
+    try:
+        with open('bot/config/combo.json', 'r') as local_file:
+            data = json.load(local_file)
+            version = data.get('version', None)
+            return version
+
+    except FileNotFoundError:
+            logger.error(f"Local file combo.json not found.")
+    except json.JSONDecodeError as json_err:
+            logger.error(f"Error parsing JSON from local file: {json_err}")
+
+    return None

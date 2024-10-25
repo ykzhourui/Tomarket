@@ -263,34 +263,6 @@ class Tapper:
         logger.info(f"{self.session_name} - Failed to retrieve puzzle from both main and backup repos, and local file.")
         return None
     
-    async def get_version_info(self):
-        async with aiohttp.ClientSession() as session:
-            try:
-                async with session.get("https://raw.githubusercontent.com/yanpaing007/Tomarket/main/bot/config/combo.json") as response:
-                    if response.status == 200:
-                        text = await response.text()
-                        data = json.loads(text)
-                        version = data.get('version', None)
-                        message = data.get('message', None)
-                        return version,message
-                    else:
-                        logger.error(f"{self.session_name} - Failed to retrieve version info. Status code: {response.status}")
-            except aiohttp.ClientError as e:
-                logger.error(f"{self.session_name} - Exception occurred while retrieving version info: {e}")
-    
-    def get_local_version_info(self):
-        try:
-            with open('bot/config/combo.json', 'r') as local_file:
-                data = json.load(local_file)
-                version = data.get('version', None)
-                return version
-
-        except FileNotFoundError:
-            logger.error(f"{self.session_name} - Local file combo.json not found.")
-        except json.JSONDecodeError as json_err:
-            logger.error(f"{self.session_name} - Error parsing JSON from local file: {json_err}")
-
-        return None
     
 
     @error_handler
@@ -371,15 +343,7 @@ class Tapper:
             random_delay = randint(settings.RANDOM_DELAY_IN_RUN[0], settings.RANDOM_DELAY_IN_RUN[1])
             logger.info(f"{self.tg_client.name} | Bot will start in <light-red>{random_delay}s</light-red>")
             await asyncio.sleep(delay=random_delay)
-        github_version,message = await self.get_version_info()
-        local_version = self.get_local_version_info()
-        
-        if github_version is not None and local_version is not None and message is not None:
-            if github_version == local_version:
-                logger.info(f"{self.session_name} | <cyan>Bot is up to date!</cyan>")
-            else:
-                logger.info(f"{self.session_name} | <cyan>Bot is out of date,please update the bot!</cyan>")
-            logger.info(f"{self.session_name} | <cyan>Developer message:{message}</cyan>")
+       
             
         proxy_conn = ProxyConnector().from_url(self.proxy) if self.proxy else None
         http_client = aiohttp.ClientSession(headers=headers, connector=proxy_conn)
