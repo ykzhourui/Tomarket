@@ -268,7 +268,8 @@ class Tapper:
             try:
                 async with session.get("https://raw.githubusercontent.com/yanpaing007/Tomarket/main/bot/config/combo.json") as response:
                     if response.status == 200:
-                        data = await response.json()
+                        text = await response.text()
+                        data = json.loads(text)
                         version = data.get('version', None)
                         message = data.get('message', None)
                         return version,message
