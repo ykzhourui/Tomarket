@@ -75,6 +75,8 @@ async def process() -> None:
     if check_base_url() is False:
         sys.exit(
             "Detected api change! Stopped the bot for safety.Please raise an issue on the GitHub repository.")
+    else:
+        logger.info("<cyan>No change in API!</cyan>")
     github_version,message = get_version_info()
     local_version = get_local_version_info()
         
@@ -82,7 +84,7 @@ async def process() -> None:
         if github_version == local_version:
             logger.info(f"<cyan>Bot is up to date! v{local_version}</cyan>")
         else:
-            logger.info(f"<cyan>Bot is out of date,update the bot with command 'git pull' , v{local_version} > v{github_version}</cyan>")
+            logger.info(f"<cyan>Bot is out of date, update the bot with command 'git pull', </cyan><light-red>v{local_version}</light-red> <cyan>> </cyan><light-red>v{github_version}</light-red>")
         logger.info(f"<cyan>Developer message:{message}</cyan>")
 
     logger.info(f"Detected {len(get_session_names())} sessions | {len(get_proxies())} proxies")

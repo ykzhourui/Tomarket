@@ -2,7 +2,7 @@ import asyncio
 from datetime import datetime
 import json
 import os,sys
-from random import randint, choices, random
+from random import randint, choices,random
 from time import time
 from urllib.parse import unquote, quote
 
@@ -336,7 +336,7 @@ class Tapper:
             if self.tg_client.is_connected:
                 await asyncio.sleep(5)
                 await self.tg_client.disconnect()
-            await asyncio.sleep(random.randint(10, 20))
+            await asyncio.sleep(randint(10, 20))
     
     async def run(self) -> None:        
         if settings.USE_RANDOM_DELAY_IN_RUN:
@@ -380,21 +380,21 @@ class Tapper:
                     ref_id, init_data = await self.get_tg_web_data()
                     access_token = await self.login(http_client=http_client, tg_web_data=init_data, ref_id=ref_id)
                     
-                    if not access_token:
-                        logger.error(f"{self.session_name} | <light-red>Failed login</light-red>")
-                        logger.info(f"{self.session_name} | Sleep <light-red>300s</light-red>")
-                        await asyncio.sleep(delay=300)
-                        continue
-                    else:
-                        logger.info(f"{self.session_name} | <green>🍅 Login successful</green>")
-                        http_client.headers["Authorization"] = f"{access_token}"
-                        token_expiration = current_time + 3600
+                if not access_token:
+                    logger.error(f"{self.session_name} | <light-red>Failed login</light-red>")
+                    logger.info(f"{self.session_name} | Sleep <light-red>300s</light-red>")
+                    await asyncio.sleep(delay=300)
+                    continue
+                else:
+                    logger.info(f"{self.session_name} | <green>🍅 Login successful</green>")
+                    http_client.headers["Authorization"] = f"{access_token}"
+                    token_expiration = time() + 3600
                         
                 await asyncio.sleep(delay=1)
                 balance = await self.get_balance(http_client=http_client)
                 if 'data' not in balance:
                     if balance.get('status') == 401:
-                        logger.warning(f"{self.session_name} | Access Denied. Re-authenticating...")
+                        logger.info(f"{self.session_name} | Access Denied. Re-authenticating...")
                         ref_id, init_data = await self.get_tg_web_data()
                         access_token = await self.login(http_client=http_client, tg_web_data=init_data, ref_id=ref_id)
                         if not access_token:
@@ -405,7 +405,7 @@ class Tapper:
                         else:
                             logger.info(f"{self.session_name} | <green>🍅 Login successful</green>")
                             http_client.headers["Authorization"] = f"{access_token}"
-                            token_expiration = current_time + 3600
+                            token_expiration = time() + 3600
                             balance = await self.get_balance(http_client=http_client)
                     else:
                         logger.error(f"{self.session_name} | Balance response missing 'data' key: {balance}")
@@ -413,7 +413,7 @@ class Tapper:
 
                 available_balance = balance['data'].get('available_balance', 0)
                 logger.info(f"{self.session_name} | Current balance | <light-red>{available_balance} 🍅</light-red>")
-                ramdom_end_time = randint(240, 350)
+                ramdom_end_time = randint(350, 500)
                 if 'farming' in balance['data']:
                     end_farm_time = balance['data']['farming']['end_at']
                     if end_farm_time > time():
@@ -472,7 +472,7 @@ class Tapper:
                                             tickets -= 1
                                             games_points += claim_game.get('data').get('points')
                                             logger.info(f"{self.session_name} | Claimed points: <light-red>+{claim_game.get('data').get('points')} </light-red>🍅")
-                                            await asyncio.sleep(1.5)
+                                            await asyncio.sleep(randint(3, 5))
                         logger.info(f"{self.session_name} | Games finish! Claimed points: <light-red>{games_points} 🍅</light-red>")
 
                 if settings.AUTO_TASK:
@@ -701,7 +701,7 @@ class Tapper:
                     if current_address == '' or current_address is None:
                         logger.info(f"{self.session_name} | Wallet address not found in tomarket bot, add it before OCT 31!")
                     else:
-                        logger.info(f"{self.session_name} | Current wallet address: '{current_address}'")
+                        logger.info(f"{self.session_name} | Current wallet address: <blue>'{current_address}'</blue>")
                         
 
                 sleep_time = end_farming_dt - time()

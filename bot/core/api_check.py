@@ -45,7 +45,6 @@ def check_base_url():
             result = get_base_api(full_url)
 
             if result:
-                logger.info("<cyan>No change in API!</cyan>")
                 return True
             else:
                 logger.warning(f"API might have changed, bot stopped for safety.")
