@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     REF_ID: str = '0001b3Lf'
     
     FAKE_USERAGENT: bool = True
-    POINTS_COUNT: list[int] = [300, 400]
+    POINTS_COUNT: list[int] = [350, 400]
     AUTO_PLAY_GAME: bool = True
     AUTO_TASK: bool = True
     AUTO_DAILY_REWARD: bool = True
@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     AUTO_RAFFLE: bool = True
     AUTO_CHANGE_NAME: bool = True
     AUTO_ADD_WALLET: bool = False
+    PLAY_RANDOM_GAME: bool = True
+    PLAY_RANDOM_GAME_COUNT: list[int] = [3, 7]
 
     USE_RANDOM_DELAY_IN_RUN: bool = True
     RANDOM_DELAY_IN_RUN: list[int] = [0, 15]

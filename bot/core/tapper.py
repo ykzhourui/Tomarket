@@ -448,32 +448,51 @@ class Tapper:
                 await asyncio.sleep(1.5)
 
                 if settings.AUTO_PLAY_GAME:
-                    tickets = balance.get('data', {}).get('play_passes', 0)
-
+                    ticket = await self.get_balance(http_client=http_client)
+                    tickets = ticket.get('data', {}).get('play_passes', 0)
                     logger.info(f"{self.session_name} | Game Play Tickets: {tickets} 🎟️")
 
                     await asyncio.sleep(1.5)
                     if tickets > 0:
                         logger.info(f"{self.session_name} | Start ticket games...")
                         games_points = 0
+                        retry_count = 0
+                        max_retries = 5
+                        if settings.PLAY_RANDOM_GAME:
+                            if  tickets > settings.PLAY_RANDOM_GAME_COUNT[1]: 
+                                tickets = randint(settings.PLAY_RANDOM_GAME_COUNT[0], settings.PLAY_RANDOM_GAME_COUNT[1])
+                                logger.info(f"{self.session_name} | Playing with: {tickets} 🎟️ this round")
+                            
+
                         while tickets > 0:
                             logger.info(f"{self.session_name} | Tickets remaining: {tickets} 🎟️")
-                            play_game = await self.play_game(http_client=http_client)
-                            if play_game and 'status' in play_game:
-                                if play_game.get('status') == 0:
-                                    await asyncio.sleep(30)
-                                    claim_game = await self.claim_game(http_client=http_client, points=randint(settings.POINTS_COUNT[0], settings.POINTS_COUNT[1]))
-                                    if claim_game and 'status' in claim_game:
-                                        if claim_game['status'] == 500 and claim_game['message'] == 'game not start':
-                                            logger.info(f"{self.session_name} | Game not started, retrying...")
-                                            continue
+                            try:
+                                play_game = await self.play_game(http_client=http_client)
+                                if play_game and 'status' in play_game:
+                                    if play_game.get('status') == 0:
+                                        await asyncio.sleep(30)  
                                         
-                                        if claim_game.get('status') == 0:
-                                            tickets -= 1
-                                            games_points += claim_game.get('data').get('points')
-                                            logger.info(f"{self.session_name} | Claimed points: <light-red>+{claim_game.get('data').get('points')} </light-red>🍅")
-                                            await asyncio.sleep(randint(3, 5))
-                        logger.info(f"{self.session_name} | Games finish! Claimed points: <light-red>{games_points} 🍅</light-red>")
+                                        claim_game = await self.claim_game(http_client=http_client, points=randint(settings.POINTS_COUNT[0], settings.POINTS_COUNT[1]))
+                                        if claim_game and 'status' in claim_game:
+                                            if claim_game['status'] == 500 and claim_game['message'] == 'game not start':
+                                                retry_count += 1
+                                                if retry_count >= max_retries:
+                                                    logger.warning(f"{self.session_name} | Max retries reached, stopping game attempts.")
+                                                    break
+                                                logger.info(f"{self.session_name} | Game not started, retrying...")
+                                                continue
+
+                                            if claim_game.get('status') == 0:
+                                                tickets -= 1
+                                                games_points += claim_game.get('data', {}).get('points', 0)
+                                                logger.info(f"{self.session_name} | Claimed points: <light-red>+{claim_game.get('data', {}).get('points', 0)} </light-red>🍅")
+                                                await asyncio.sleep(randint(3, 5))
+
+                            except Exception as e:
+                                logger.error(f"{self.session_name} | An error occurred: {e}")
+                                await asyncio.sleep(5)
+
+                        logger.info(f"{self.session_name} | Games finished! Claimed points: <light-red>{games_points} 🍅</light-red>")
 
                 if settings.AUTO_TASK:
                     logger.info(f"{self.session_name} | Start checking tasks.")
