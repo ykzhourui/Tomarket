@@ -5,6 +5,23 @@ from bot.utils import logger
 
 baseUrl = "https://api-web.tomarket.ai/tomarket-game/v1"
 
+api_endpoints = [
+    r"https://api-web.tomarket.ai/tomarket-game/v1",
+    r"/user/login",
+    r"/user/balance",
+    r"/daily/claim",
+    r"/tasks/list",
+    r"/tasks/start",
+    r"/tasks/check",
+    r"/tasks/claim",
+    r"/user/tickets",
+    r"/spin/raffle",
+    r"/tasks/puzzle",
+    r"/tasks/puzzleClaim",
+    r"/tasks/classmateTask",
+    r"/tasks/classmateStars",
+]
+
 def get_main_js_format(base_url):
     try:
         response = requests.get(base_url)
@@ -25,12 +42,15 @@ def get_base_api(url):
         response = requests.get(url)
         response.raise_for_status()
         content = response.text
-        search_string = 'online:"https://api-web.tomarket.ai/tomarket-game/v1"'
-
-        if search_string in content:
+        
+        # Check if each API endpoint pattern matches any part of the JS content
+        missing_endpoints = [pattern for pattern in api_endpoints if not re.search(pattern, content)]
+        
+        if not missing_endpoints:
             return True
         else:
-            return None
+            logger.error("<red>Missing endpoints:</red>", missing_endpoints)
+            return False
     except requests.RequestException as e:
         logger.error(f"Error fetching the JS file: {e}")
         return None
@@ -41,23 +61,22 @@ def check_base_url():
 
     if main_js_formats:
         for format in main_js_formats:
-            full_url = f"https://mini-app.tomarket.ai{format}"
+            full_url = f"https://mini-app.tomarket.ai/{format}"
             result = get_base_api(full_url)
 
             if result:
                 return True
             else:
-                logger.warning(f"API might have changed, bot stopped for safety.")
                 return False
     else:
-        logger.info("Could not find any main.js format. Dumping page content for inspection:")
+        logger.error("Could not find any main.js format. Dumping page content for inspection:")
         try:
             response = requests.get(base_url)
-            logger.info(response.text[:1000])
+            logger.error(response.text[:1000])
         except requests.RequestException as e:
-            logger.info(f"Error fetching the base URL for content dump: {e}")
+            logger.error(f"Error fetching the base URL for content dump: {e}")
         return False
-    
+
 def get_version_info():
     try:
         response = requests.get("https://raw.githubusercontent.com/yanpaing007/Tomarket/refs/heads/main/bot/config/combo.json")

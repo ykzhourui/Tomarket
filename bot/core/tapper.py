@@ -130,7 +130,7 @@ class Tapper:
         
     @error_handler
     async def login(self, http_client, tg_web_data: str, ref_id: str) -> tuple[str, str]:
-        response = await self.make_request(http_client, "POST", "/user/login", json={"init_data": tg_web_data, "invite_code": ref_id})
+        response = await self.make_request(http_client, "POST", "/user/login", json={"init_data": tg_web_data, "invite_code": ref_id, "from":"","is_bot":False})
         return response.get('data', {}).get('access_token', None)
 
     @error_handler
