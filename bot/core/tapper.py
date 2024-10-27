@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import os,sys
 from random import randint, choices,random
@@ -40,14 +40,10 @@ def convert_to_local_and_unix(iso_time):
     unix_time = int(local_dt.timestamp())
     return unix_time
 
-def is_puzzle_expired(expiration_time_utc_str):
-    local_tz = get_localzone()
-    utc_tz = pytz.utc
-    expiration_time_utc = datetime.strptime(expiration_time_utc_str, '%Y-%m-%d %I:%M %p')
-    expiration_time_utc = utc_tz.localize(expiration_time_utc)
-    expiration_time_local = expiration_time_utc.astimezone(local_tz)
-    current_time = datetime.now(local_tz)
-    return current_time >= expiration_time_local
+def next_daily_check():
+    current_time = datetime.now()
+    next_day = current_time + timedelta(days=1)
+    return next_day
 
 class Tapper:
     def __init__(self, tg_client: Client, proxy: str | None):
@@ -204,6 +200,10 @@ class Tapper:
         return await self.make_request(http_client, "POST", "/tasks/classmateStars", json=data)
     
     @error_handler
+    async def check_blacklist(self, http_client, data):
+        return await self.make_request(http_client, "POST", "/rank/blacklist", json=data)
+    
+    @error_handler
     async def get_puzzle(self, taskId):
         urls = [
             "https://raw.githubusercontent.com/yanpaing007/Tomarket/refs/heads/main/bot/config/combo.json",
@@ -358,6 +358,7 @@ class Tapper:
         token_expiration = 0
         tickets = 0
         next_combo_check = 0
+        next_check_time = None
         
         while True:
             try:
@@ -389,8 +390,8 @@ class Tapper:
                     logger.info(f"{self.session_name} | <green>🍅 Login successful</green>")
                     http_client.headers["Authorization"] = f"{access_token}"
                     token_expiration = time() + 3600
-                        
                 await asyncio.sleep(delay=1)
+                
                 balance = await self.get_balance(http_client=http_client)
                 if 'data' not in balance:
                     if balance.get('status') == 401:
@@ -426,24 +427,26 @@ class Tapper:
                         if claim_farming.get('status') == 500:
                             start_farming = await self.start_farming(http_client=http_client)
                             if start_farming and 'status' in start_farming and start_farming['status'] in [0, 200]:
-                                logger.info(f"{self.session_name} | Farm started.. 🍅")
+                                logger.success(f"{self.session_name} | Farm started.. 🍅")
                                 end_farming_dt = start_farming['data']['end_at'] + ramdom_end_time
                                 logger.info(f"{self.session_name} | Next farming claim in <light-red>{round((end_farming_dt - time()) / 60)}m.</light-red>")
                         elif claim_farming.get('status') == 0:
                             farm_points = claim_farming['data']['claim_this_time']
-                            logger.info(f"{self.session_name} | Success claim farm. Reward: <light-red>+{farm_points}</light-red> 🍅")
+                            logger.success(f"{self.session_name} | Success claim farm. Reward: <light-red>+{farm_points}</light-red> 🍅")
                             start_farming = await self.start_farming(http_client=http_client)
                             if start_farming and 'status' in start_farming and start_farming['status'] in [0, 200]:
-                                logger.info(f"{self.session_name} | Farm started.. 🍅")
+                                logger.success(f"{self.session_name} | Farm started.. 🍅")
                                 end_farming_dt = start_farming['data']['end_at'] + ramdom_end_time
                                 logger.info(f"{self.session_name} | Next farming claim in <light-red>{round((end_farming_dt - time()) / 60)}m.</light-red>")
                     await asyncio.sleep(1.5)
 
 
-                if settings.AUTO_DAILY_REWARD:
+                if settings.AUTO_DAILY_REWARD and (next_check_time is None or datetime.now() > next_check_time):
                     claim_daily = await self.claim_daily(http_client=http_client)
                     if claim_daily and 'status' in claim_daily and claim_daily.get("status", 400) != 400:
-                        logger.info(f"{self.session_name} | Daily: <light-red>{claim_daily['data']['today_game']}</light-red> reward: <light-red>{claim_daily['data']['today_points']}</light-red>")
+                        logger.success(f"{self.session_name} | Daily: <light-red>{claim_daily['data']['today_game']}</light-red> reward: <light-red>{claim_daily['data']['today_points']}</light-red>")
+                    next_check_time = next_daily_check()
+                    logger.info(f"{self.session_name} | Next daily check in <light-red>{next_check_time}</light-red>")
 
                 await asyncio.sleep(1.5)
 
@@ -485,7 +488,7 @@ class Tapper:
                                             if claim_game.get('status') == 0:
                                                 tickets -= 1
                                                 games_points += claim_game.get('data', {}).get('points', 0)
-                                                logger.info(f"{self.session_name} | Claimed points: <light-red>+{claim_game.get('data', {}).get('points', 0)} </light-red>🍅")
+                                                logger.success(f"{self.session_name} | Claimed points: <light-red>+{claim_game.get('data', {}).get('points', 0)} </light-red>🍅")
                                                 await asyncio.sleep(randint(3, 5))
 
                             except Exception as e:
@@ -556,7 +559,7 @@ class Tapper:
                         if claim:
                                 if claim['status'] == 0:
                                     reward = task.get('score', 'unknown')
-                                    logger.info(f"{self.session_name} | Task <light-red>{task['name']}</light-red> claimed! Reward: {reward} 🍅")
+                                    logger.success(f"{self.session_name} | Task <light-red>{task['name']}</light-red> claimed! Reward: {reward} 🍅")
                                 else:
                                     logger.info(f"{self.session_name} | Task <light-red>{task['name']}</light-red> not claimed. Reason: {claim.get('message', 'Unknown error')}")
                         await asyncio.sleep(2)
@@ -564,11 +567,13 @@ class Tapper:
                 await asyncio.sleep(3)
 
                 if await self.create_rank(http_client=http_client):
-                    logger.info(f"{self.session_name} | Rank created! 🍅")
+                    logger.success(f"{self.session_name} | Rank created! 🍅")
                 
                 if settings.AUTO_RANK_UPGRADE:
                     rank_data = await self.get_rank_data(http_client=http_client)
                     unused_stars = rank_data.get('data', {}).get('unusedStars', 0)
+                    current_rank = rank_data.get('data', {}).get('currentRank', "Unknown rank").get('name', "Unknown rank")
+                    
                     try:
                         unused_stars = int(float(unused_stars)) 
                     except ValueError:
@@ -577,10 +582,12 @@ class Tapper:
                     if unused_stars > 0:
                         upgrade_rank = await self.upgrade_rank(http_client=http_client, stars=unused_stars)
                         if upgrade_rank.get('status', 500) == 0:
-                            logger.info(f"{self.session_name} | Rank upgraded! 🍅")
+                            logger.success(f"{self.session_name} | Rank upgraded! 🍅")
                         else:
                             logger.info(
                                 f"{self.session_name} | Rank not upgraded. Reason: <light-red>{upgrade_rank.get('message', 'Unknown error')}</light-red>")
+                    if current_rank:
+                        logger.info(f"{self.session_name} | Current rank: <cyan>{current_rank}</cyan>")
                             
                             
                             
@@ -633,7 +640,7 @@ class Tapper:
                                         isinstance(claim_combo.get('data'), dict) and 
                                         not claim_combo['data']):
                                         
-                                        logger.info(
+                                        logger.success(
                                             f"{self.session_name} | Claimed combo | Stars: +{star_amount} ⭐ | Games Token: +{games_token} 🎟️ | Tomatoes: +{tomato_token} 🍅"
                                         )
 
@@ -667,7 +674,7 @@ class Tapper:
                                         raffle_result = results[0]  # Access the first item in the list
                                         amount = raffle_result.get('amount', 0)
                                         item_type = raffle_result.get('type', 0)
-                                        logger.info(f"{self.session_name} | Raffle result: {amount} | <light-red>{item_type}</light-red>")
+                                        logger.success(f"{self.session_name} | Raffle result: {amount} | <light-red>{item_type}</light-red>")
                                     tickets -= 1
                                     await asyncio.sleep(5)
                             logger.info(f"{self.session_name} | Raffle finish! 🍅")
@@ -694,7 +701,7 @@ class Tapper:
                                     
                                     add_wallet = await self.make_request(http_client, "POST", "/tasks/address", json={"wallet_address": my_address})
                                     if add_wallet and add_wallet.get('status', 500) == 0:
-                                        logger.info(f"{self.session_name} | Wallet address '{my_address}' added successfully!")
+                                        logger.success(f"{self.session_name} | Wallet address '{my_address}' added successfully!")
                                     else:
                                         logger.error(f"{self.session_name} | Failed to add wallet address.Reason: {add_wallet.get('message', 'Unknown error')}")
                                 elif server_address != my_address:
@@ -702,11 +709,11 @@ class Tapper:
                                     logger.info(f"{self.session_name} | Trying to remove wallet address...")
                                     remove_wallet = await self.make_request(http_client, "POST", "/tasks/deleteAddress")
                                     if remove_wallet and remove_wallet.get('status', 500) == 0 and remove_wallet.get('data',{}) == 'ok':
-                                        logger.info(f"{self.session_name} | Wallet address removed successfully!")
+                                        logger.success(f"{self.session_name} | Wallet address removed successfully!")
                                         logger.info(f"{self.session_name} | Trying to add wallet address...")
                                         add_wallet = await self.make_request(http_client, "POST", "/tasks/address", json={"wallet_address": my_address})
                                         if add_wallet and add_wallet.get('status', 500) == 0:
-                                            logger.info(f"{self.session_name} | Wallet address '{my_address}' added successfully!")
+                                            logger.success(f"{self.session_name} | Wallet address '{my_address}' added successfully!")
                                         else:
                                             logger.error(f"{self.session_name} | Failed to add wallet address.Reason: {add_wallet.get('message', 'Unknown error')}")
                                     else:
@@ -720,7 +727,7 @@ class Tapper:
                     if current_address == '' or current_address is None:
                         logger.info(f"{self.session_name} | Wallet address not found in tomarket bot, add it before OCT 31!")
                     else:
-                        logger.info(f"{self.session_name} | Current wallet address: <blue>'{current_address}'</blue>")
+                        logger.info(f"{self.session_name} | Current wallet address: <cyan>'{current_address}'</cyan>")
                         
 
                 sleep_time = end_farming_dt - time()
